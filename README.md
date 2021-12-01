@@ -13,6 +13,9 @@ You can find more information in here: https://docs.microsoft.com/en-us/windows/
 
 Just run .sln file and build project and you ready to go.
 
+
+You can get stable build from Microsoft Store:  https://www.microsoft.com/store/productId/9N97V1RZGT1P
+
 Screenshot:
 ![142405908-0a449029-41a2-44ea-91ba-6639f8372b00](https://user-images.githubusercontent.com/35468866/142761957-9c3f2fc4-ddcd-4ab6-a87d-30525fbd2813.png)
 
