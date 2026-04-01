@@ -36,9 +36,9 @@
   <Import Project="$(WapProjPath)\Microsoft.DesktopBridge.props" />
   <PropertyGroup>
     <ProjectGuid>f665a81d-8b72-41f4-98e6-258439aaaae7</ProjectGuid>
-    <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
-    <AssetTargetFallback>net6.0-windows$(TargetPlatformVersion);$(AssetTargetFallback)</AssetTargetFallback>
+    <AssetTargetFallback>net8.0-windows$(TargetPlatformVersion);$(AssetTargetFallback)</AssetTargetFallback>
     <DefaultLanguage>en-US</DefaultLanguage>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <EntryPointProjectUniqueName>..\WinUI3_Serial_Port_Communication\WinUI3_Serial_Port_Communication.csproj</EntryPointProjectUniqueName>
@@ -60,14 +60,14 @@
   <ItemGroup>
     <ProjectReference Include="..\WinUI3_Serial_Port_Communication\WinUI3_Serial_Port_Communication.csproj">
       <SkipGetTargetFrameworkProperties>True</SkipGetTargetFrameworkProperties>
-      <PublishProfile>Properties\PublishProfiles\win10-$(Platform).pubxml</PublishProfile>
+      <PublishProfile>Properties\PublishProfiles\win-$(Platform).pubxml</PublishProfile>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="[1.0.0]">
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="[1.8.260317003]">
       <IncludeAssets>build</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="[10.0.22000.194]">
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="[10.0.26100.7705]">
       <IncludeAssets>build</IncludeAssets>
     </PackageReference>
   </ItemGroup>
