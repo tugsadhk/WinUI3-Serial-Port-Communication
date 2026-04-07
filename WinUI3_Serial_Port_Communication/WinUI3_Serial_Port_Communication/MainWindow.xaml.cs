@@ -1,366 +1,504 @@
-﻿using Microsoft.UI.Composition;
+using System;
+using System.Collections.Generic;
+using System.IO.Ports;
+using System.Text;
+
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using System;
-using System.Diagnostics;
-using System.Drawing;
-using System.IO.Ports;
-using System.Numerics;
-using System.Text;
-using System.Threading;
-using Windows.UI.Popups;
+using Microsoft.UI.Xaml.Media;
 
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using Windows.Storage.Pickers;
+using Windows.System;
+using Windows.UI.Core;
 
 namespace WinUI3_Serial_Port_Communication
 {
-    /// <summary>
-    /// An empty window that can be used on its own or navigated to within a Frame.
-    /// </summary>
     public sealed partial class MainWindow : Window
     {
-        private bool connectionStarted = false;
-        private SerialPort _serialPort;
-        private int baudRate = 0;
-        private int dataBits = 0;
-        private string parity;
+        #region Fields
+
+        private readonly SerialPortService _service = new();
+
+        // Settings (written from UI thread, read from DataReceived thread → volatile)
+        private volatile bool _timestampEnabled = false;
+        private volatile bool _hexViewEnabled   = false;
+        private volatile bool _autoScroll       = true;
+
+        private string   _lineEnding = "\r\n";
+        private Encoding _encoding   = Encoding.UTF8;
+        private int      _txBytes    = 0;
+        private int      _rxBytes    = 0;
+        private int      _errorCount = 0;
+
+        // Send history
+        private readonly List<string> _sendHistory = new();
+        private int    _historyIndex = -1;
+        private string _historyDraft = string.Empty;
+        private const int MaxHistorySize = 50;
+
+        // Receive buffer limit (line count)
+        private const int MaxReceiveLines = 500;
+
+        private enum ConnectionState { Disconnected, Connected, Error }
+
+        #endregion
+
+        #region Initialization
 
         public MainWindow()
         {
             this.InitializeComponent();
+            this.Title  = "Serial Communication  ·  WinUI 3";
+            this.Closed += MainWindow_Closed;
 
-            findConnectedPorts();
-            //Debug.WriteLine("Height  " + this.Bounds.Height + "   width " + this.Bounds.Width);
+            // Mica backdrop (Win 11), graceful fallback to Acrylic (Win 10)
+            if (Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported())
+                this.SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
+            else
+                this.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
 
-            Main_Canvas.Height = this.Bounds.Height;
-            Main_Canvas.Width = this.Bounds.Width;
-            Example1Grid.Width = this.Bounds.Width;
-            Example1Grid.Height = this.Bounds.Height;
+            // Wire service events
+            _service.DataReceived  += Service_DataReceived;
+            _service.ErrorOccurred += Service_ErrorOccurred;
+            _service.ConnectionLost += Service_ConnectionLost;
 
-            this.SizeChanged += MainWindow_SizeChanged;
-
-            //this.ExtendsContentIntoTitleBar = true;
-            this.Title = "Serial Communication WinUI 3";
-
+            FindConnectedPorts();
+            LoadSettings();
         }
 
-        private void MainWindow_SizeChanged(object sender, WindowSizeChangedEventArgs args)
+        #endregion
+
+        #region Window Events
+
+        private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
-            //Debug.WriteLine("Size Changing");
-            Main_Canvas.Height = this.Bounds.Height;
-            Main_Canvas.Width = this.Bounds.Width;
-            Example1Grid.Width = this.Bounds.Width;
-            Example1Grid.Height = this.Bounds.Height;
-
-
-            Send_TxtBox.VerticalAlignment = VerticalAlignment.Center;
-            Send_TxtBox.HorizontalAlignment = HorizontalAlignment.Center;
-
-
-
+            SaveSettings();
+            _service.Dispose();
         }
 
-        private void findConnectedPorts()
-        {
-            Port_CmbBox.Items.Clear();
+        #endregion
 
-            string[] ports = SerialPort.GetPortNames();
-
-            foreach (string port in ports)
-            {
-                Port_CmbBox.Items.Add(port);
-            }
-        }
-
-
-
-        private void SerialPortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-
-            try
-            {
-                string itemName = e.AddedItems[0].ToString();
-                //Debug.WriteLine("Item Name  " + itemName);
-            }
-            catch (Exception ex)
-            {
-            }
-
-        }
-
-
-        //Compositor _compositor = App.CurrentWindow.Compositor;
-        SpringVector3NaturalMotionAnimation _springAnimation;
-
-        private void CreateOrUpdateSpringAnimation(float finalValue)
-        {
-            if (_springAnimation == null)
-            {
-                _springAnimation = this.Compositor.CreateSpringVector3Animation();
-                _springAnimation.Target = "Scale";
-            }
-
-            _springAnimation.FinalValue = new Vector3(finalValue);
-        }
-
-
-
-        private void element_PointerEntered(object sender, PointerRoutedEventArgs e)
-        {
-            Button button = sender as Button;
-            // Scale up to 1.5
-            switch (button.Name)
-            {
-                case "Connect_Btn":
-                    CreateOrUpdateSpringAnimation(1.3f);
-                    break;
-                case "Disconnect_Btn":
-                    CreateOrUpdateSpringAnimation(0.85f);
-                    break;
-            }
-
-
-            (sender as UIElement).StartAnimation(_springAnimation);
-
-        }
-
-        private void element_PointerExited(object sender, PointerRoutedEventArgs e)
-        {
-            // Scale back down to 1.0
-            CreateOrUpdateSpringAnimation(1.0f);
-
-            (sender as UIElement).StartAnimation(_springAnimation);
-
-        }
-
-        private void Refresh_Btn_Click(object sender, RoutedEventArgs e)
-        {
-            findConnectedPorts();
-        }
-
+        #region Serial Port – Connect / Disconnect
 
         private async void Connect_Button_Click(object sender, RoutedEventArgs e)
         {
-            if (Port_CmbBox.SelectedIndex == -1 || baudRate == 0)
+            if (Port_CmbBox.SelectedIndex == -1 || BaudR_CmbBox.SelectedIndex == -1)
             {
-                var cd = new ContentDialog
+                await new ContentDialog
                 {
-                    Title = "Mising Info",
-                    Content = "Check Serial Port Info Section",
-                    CloseButtonText = "Ok"
-                };
-
-                cd.XamlRoot = this.Content.XamlRoot;
-                var result = await cd.ShowAsync();
-
-            }
-            else
-            {
-                ////Start Connection
-                if (!connectionStarted)
-                {
-
-                    _serialPort = new SerialPort();
-                    _serialPort.PortName = Port_CmbBox.SelectedItem.ToString();
-                    _serialPort.BaudRate = baudRate;
-                    _serialPort.Parity = Parity.None;
-                    _serialPort.DataBits = 8;
-
-                    if ((bool)Dtr_ChcBox.IsChecked)
-                    {
-                        _serialPort.DtrEnable = true;
-                    }
-                    else
-                    {
-                        _serialPort.DtrEnable = false;
-                    }
-
-                    if ((bool)Rts_ChcBox.IsChecked)
-                    {
-                        _serialPort.RtsEnable = true;
-                    }
-                    else
-                    {
-                        _serialPort.RtsEnable = false;
-                    }
-
-                    if (dataBits != 0)
-                    {
-                        _serialPort.DataBits = dataBits;
-                    }
-
-                    try
-                    {
-                        _serialPort.Open();
-                    }
-                    catch (Exception ex)
-                    {
-
-                        Connection_ProgressBar.IsIndeterminate = true;
-                        Connection_ProgressBar.ShowError = true;
-                        logError(ex.Message);
-                    }
-
-                    Thread.Sleep(30);
-
-                    if (_serialPort.IsOpen)
-                    {
-                        connectionStarted = true;
-
-                        Connection_ProgressBar.ShowError = false;
-                        Connection_ProgressBar.IsIndeterminate = false;
-                        Connection_ProgressBar.Value = 100;
-
-                    }
-                    else
-                    {
-                        Connection_ProgressBar.IsIndeterminate = true;
-                        Connection_ProgressBar.IsIndeterminate = true;
-                        Connection_ProgressBar.ShowError = true;
-                    }
-
-
-                    _serialPort.DataReceived += _serialPort_DataReceived;
-                }
-            }
-        }
-
-        private int txtBoxCounter = 0;
-        private void _serialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
-        {
-
-
-            SerialPort spL = (SerialPort)sender;
-            byte[] buf = new byte[spL.BytesToRead];
-            spL.Read(buf, 0, buf.Length);
-            foreach (Byte b in buf)
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    Receive_TxtBox.Text += (char)b;
-
-                    if (!Connection_ProgressBar.IsIndeterminate)
-                    {
-                        Connection_ProgressBar.IsIndeterminate = true;
-                    }
-                });
+                    Title         = "Missing Configuration",
+                    Content       = "Please select a port and baud rate.",
+                    CloseButtonText = "OK",
+                    XamlRoot      = this.Content.XamlRoot
+                }.ShowAsync();
+                return;
             }
 
-            DispatcherQueue.TryEnqueue(() =>
+            var cfg = new SerialPortConfig
             {
-                Receive_TxtBox.Text += "\n";
-                txtBoxCounter++;
-                if (txtBoxCounter == 10)
+                PortName  = Port_CmbBox.SelectedItem.ToString(),
+                BaudRate  = int.Parse(((ComboBoxItem)BaudR_CmbBox.SelectedItem).Content.ToString()),
+                DataBits  = DataBits_CmbBox.SelectedIndex >= 0
+                                ? int.Parse(((ComboBoxItem)DataBits_CmbBox.SelectedItem).Content.ToString())
+                                : 8,
+                StopBits  = StopBits_CmbBox.SelectedIndex switch
                 {
-                    txtBoxCounter = 0;
-                    Receive_TxtBox.Text = "";
-                }
-            });
+                    1     => StopBits.OnePointFive,
+                    2     => StopBits.Two,
+                    _     => StopBits.One
+                },
+                Parity    = Parity_CmbBox.SelectedIndex >= 0 && Parity_CmbBox.SelectedItem is ComboBoxItem pi
+                                ? Enum.TryParse(pi.Content.ToString(), out Parity p) ? p : Parity.None
+                                : Parity.None,
+                DtrEnable = Dtr_ChcBox.IsChecked == true,
+                RtsEnable = Rts_ChcBox.IsChecked == true
+            };
 
-            //switch (e.EventType)
-            //{
-            //    case SerialData.Chars:
-            //        break;
-            //    case SerialData.Eof:
-            //        break;
-            //    default:
-            //        break;
-            //}
-            GC.Collect();
+            try
+            {
+                _service.Connect(cfg);
+                SetConnectionState(ConnectionState.Connected);
+            }
+            catch (Exception ex)
+            {
+                // Connect failed — go back to Disconnected (not Error, which is reserved
+                // for unexpected disconnections while the port was already open).
+                SetConnectionState(ConnectionState.Disconnected);
+                LogError($"Failed to connect: {ex.Message}");
+            }
         }
 
         private void Disconnect_Button_Click(object sender, RoutedEventArgs e)
         {
-            if (_serialPort != null && _serialPort.IsOpen)
-            {
-                _serialPort.Close();
-                connectionStarted = false;
-
-            }
-
-            Connection_ProgressBar.IsIndeterminate = false;
-            Connection_ProgressBar.Value = 0;
-            GC.Collect();
+            _service.Disconnect();
+            SetConnectionState(ConnectionState.Disconnected);
         }
+
+        private void FindConnectedPorts()
+        {
+            string selected = Port_CmbBox.SelectedItem?.ToString();
+            Port_CmbBox.Items.Clear();
+            foreach (string port in SerialPort.GetPortNames())
+                Port_CmbBox.Items.Add(port);
+
+            // Restore previous selection when possible
+            if (selected != null)
+                for (int i = 0; i < Port_CmbBox.Items.Count; i++)
+                    if (Port_CmbBox.Items[i].ToString() == selected)
+                    { Port_CmbBox.SelectedIndex = i; break; }
+        }
+
+        #endregion
+
+        #region Serial Port – Send / Receive
 
         private async void Send_Button_Click(object sender, RoutedEventArgs e)
         {
-
-            if (_serialPort != null && _serialPort.IsOpen)
+            if (!_service.IsConnected)
             {
-                _serialPort.WriteLine(Send_TxtBox.Text);
-            }
-            else
-            {
-                var cd = new ContentDialog
+                await new ContentDialog
                 {
-                    Title = "Fail",
-                    Content = "You need to open serial port first!",
-                    CloseButtonText = "Ok"
-                };
-
-                cd.XamlRoot = this.Content.XamlRoot;
-                var result = await cd.ShowAsync();
+                    Title           = "Not Connected",
+                    Content         = "Open the serial port first.",
+                    CloseButtonText = "OK",
+                    XamlRoot        = this.Content.XamlRoot
+                }.ShowAsync();
+                return;
             }
+
+            string text = Send_TxtBox.Text;
+            if (string.IsNullOrEmpty(text)) return;
+
+            try
+            {
+                byte[] data = _encoding.GetBytes(text + _lineEnding);
+                _service.Write(data);
+                _txBytes += data.Length;
+
+                AddToHistory(text);
+                Send_TxtBox.Text = string.Empty;
+                TxBytes_Txt.Text = SerialTerminalHelpers.FormatBytes(_txBytes);
+            }
+            catch (Exception ex)
+            {
+                LogError(ex.Message);
+            }
+        }
+
+        private void Service_DataReceived(object sender, byte[] buffer)
+        {
+            bool   hex       = _hexViewEnabled;
+            bool   ts        = _timestampEnabled;
+            bool   scroll    = _autoScroll;
+            int    len       = buffer.Length;
+
+            string text = hex
+                ? BitConverter.ToString(buffer).Replace("-", " ")
+                : _encoding.GetString(buffer);
+
+            string prefix = ts ? $"[{DateTime.Now:HH:mm:ss.fff}] " : string.Empty;
 
             DispatcherQueue.TryEnqueue(() =>
             {
-                Send_TxtBox.Text = "";
+                _rxBytes += len;
+
+                string current = Receive_TxtBox.Text;
+                string appended = current + prefix + text;
+                Receive_TxtBox.Text = SerialTerminalHelpers.TrimToMaxLines(appended, MaxReceiveLines);
+
+                if (scroll)
+                    Receive_TxtBox.SelectionStart = Receive_TxtBox.Text.Length;
+
+                RxBytes_Txt.Text = SerialTerminalHelpers.FormatBytes(_rxBytes);
             });
-
-            GC.Collect();
         }
 
-        private void BaudR_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void Service_ErrorOccurred(object sender, string message)
         {
-            var container = sender as ComboBox;
-            var selected = container.SelectedItem as ComboBoxItem;
-            baudRate = Int32.Parse(selected.Content.ToString());
+            LogError(message);
         }
 
-        private void Data_Bits_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void Service_ConnectionLost(object sender, EventArgs e)
         {
-            var container = sender as ComboBox;
-            var selected = container.SelectedItem as ComboBoxItem;
-            dataBits = Int32.Parse(selected.Content.ToString());
-        }
+            // Disconnect first (thread-safe) so the port is fully closed before
+            // the user tries to reconnect; otherwise Connect() would throw "Already connected".
+            _service.Disconnect();
 
-        private void Parity_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            var container = sender as ComboBox;
-            var selected = container.SelectedItem as ComboBoxItem;
-            parity = selected.Content.ToString();
-        }
-
-
-
-        private int errorLogCounter = 0;
-        private void logError(string errorMessage)
-        {
-            errorLogCounter++;
-
-            if (errorLogCounter == 7)
+            DispatcherQueue.TryEnqueue(() =>
             {
-                errorLogCounter = 0;
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    Error_TxtBox.Text = "";
-                });
-            }
-            else
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    Error_TxtBox.Text += errorMessage + "\n";
-                });
-            }
-
-
+                SetConnectionState(ConnectionState.Error);
+                LogError("Connection lost – device may have been disconnected.");
+            });
         }
 
+        #endregion
 
+        #region Send History
 
+        private void AddToHistory(string text)
+        {
+            // Avoid consecutive duplicates
+            if (_sendHistory.Count == 0 || _sendHistory[^1] != text)
+                _sendHistory.Add(text);
+
+            if (_sendHistory.Count > MaxHistorySize)
+                _sendHistory.RemoveAt(0);
+
+            _historyIndex = -1;
+            _historyDraft = string.Empty;
+        }
+
+        private void NavigateHistory(int direction)
+        {
+            if (_sendHistory.Count == 0) return;
+
+            if (direction == -1) // older
+            {
+                if (_historyIndex == -1)
+                {
+                    _historyDraft = Send_TxtBox.Text;
+                    _historyIndex = _sendHistory.Count - 1;
+                }
+                else if (_historyIndex > 0)
+                {
+                    _historyIndex--;
+                }
+                Send_TxtBox.Text = _sendHistory[_historyIndex];
+            }
+            else // newer
+            {
+                if (_historyIndex == -1) return;
+
+                if (_historyIndex < _sendHistory.Count - 1)
+                {
+                    _historyIndex++;
+                    Send_TxtBox.Text = _sendHistory[_historyIndex];
+                }
+                else
+                {
+                    _historyIndex    = -1;
+                    Send_TxtBox.Text = _historyDraft;
+                }
+            }
+
+            // Move cursor to end
+            Send_TxtBox.SelectionStart = Send_TxtBox.Text.Length;
+        }
+
+        #endregion
+
+        #region UI Events
+
+        private void Refresh_Btn_Click(object sender, RoutedEventArgs e)
+            => FindConnectedPorts();
+
+        private void Encoding_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            _encoding = Encoding_CmbBox.SelectedIndex switch
+            {
+                1     => Encoding.ASCII,
+                2     => Encoding.Latin1,
+                _     => Encoding.UTF8
+            };
+        }
+
+        private void LineEnding_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            _lineEnding = LineEnding_CmbBox.SelectedIndex switch
+            {
+                0     => "",
+                1     => "\r",
+                2     => "\n",
+                3     => "\r\n",
+                _     => "\r\n"
+            };
+        }
+
+        private void AutoScroll_Btn_Click(object sender, RoutedEventArgs e)
+            => _autoScroll = AutoScroll_Btn.IsChecked == true;
+
+        private void Timestamp_ChcBox_Click(object sender, RoutedEventArgs e)
+            => _timestampEnabled = Timestamp_ChcBox.IsChecked == true;
+
+        private void HexView_ChcBox_Click(object sender, RoutedEventArgs e)
+            => _hexViewEnabled = HexView_ChcBox.IsChecked == true;
+
+        private void ClearReceive_Btn_Click(object sender, RoutedEventArgs e)
+        {
+            Receive_TxtBox.Text = string.Empty;
+            _rxBytes            = 0;
+            RxBytes_Txt.Text    = SerialTerminalHelpers.FormatBytes(0);
+        }
+
+        private void ClearError_Btn_Click(object sender, RoutedEventArgs e)
+        {
+            Error_TxtBox.Text          = string.Empty;
+            _errorCount                = 0;
+            ErrorCount_Badge.Visibility = Visibility.Collapsed;
+        }
+
+        private async void SaveReceive_Btn_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(Receive_TxtBox.Text)) return;
+
+            try
+            {
+                var picker = new FileSavePicker();
+                picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+                picker.FileTypeChoices.Add("Text file", new List<string> { ".txt" });
+                picker.SuggestedFileName = $"received_{DateTime.Now:yyyyMMdd_HHmmss}";
+
+                WinRT.Interop.InitializeWithWindow.Initialize(picker,
+                    WinRT.Interop.WindowNative.GetWindowHandle(this));
+
+                var file = await picker.PickSaveFileAsync();
+                if (file != null)
+                    await Windows.Storage.FileIO.WriteTextAsync(file, Receive_TxtBox.Text);
+            }
+            catch (Exception ex)
+            {
+                LogError(ex.Message);
+            }
+        }
+
+        private void Send_TxtBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case VirtualKey.Enter:
+                {
+                    bool shift = (Microsoft.UI.Input.InputKeyboardSource
+                        .GetKeyStateForCurrentThread(VirtualKey.Shift) & CoreVirtualKeyStates.Down) != 0;
+
+                    if (shift)
+                    {
+                        // Insert newline at cursor position
+                        int pos = Send_TxtBox.SelectionStart;
+                        Send_TxtBox.Text = Send_TxtBox.Text.Insert(pos, "\n");
+                        Send_TxtBox.SelectionStart = pos + 1;
+                    }
+                    else
+                    {
+                        Send_Button_Click(sender, e);
+                    }
+                    e.Handled = true;
+                    break;
+                }
+                case VirtualKey.Up:
+                    NavigateHistory(-1);
+                    e.Handled = true;
+                    break;
+                case VirtualKey.Down:
+                    NavigateHistory(1);
+                    e.Handled = true;
+                    break;
+            }
+        }
+
+        #endregion
+
+        #region Connection State
+
+        private void SetConnectionState(ConnectionState state)
+        {
+            bool connected = state == ConnectionState.Connected;
+
+            bool notConnected = !connected;
+            Connect_Btn.IsEnabled      = notConnected;
+            Disconnect_Btn.IsEnabled   = connected;
+            Port_CmbBox.IsEnabled      = notConnected;
+            Refresh_Btn.IsEnabled      = notConnected;
+            BaudR_CmbBox.IsEnabled     = notConnected;
+            DataBits_CmbBox.IsEnabled  = notConnected;
+            StopBits_CmbBox.IsEnabled  = notConnected;
+            Parity_CmbBox.IsEnabled    = notConnected;
+            Encoding_CmbBox.IsEnabled  = notConnected;
+            Dtr_ChcBox.IsEnabled       = notConnected;
+            Rts_ChcBox.IsEnabled       = notConnected;
+
+            Status_Txt.Text = state switch
+            {
+                ConnectionState.Connected    => "Connected",
+                ConnectionState.Error        => "Error",
+                _                            => "Disconnected"
+            };
+
+            string brushKey = state switch
+            {
+                ConnectionState.Connected => "SystemFillColorSuccessBrush",
+                ConnectionState.Error     => "SystemFillColorCriticalBrush",
+                _                         => "SystemFillColorNeutralBrush"
+            };
+
+            if (Application.Current.Resources.TryGetValue(brushKey, out object brush))
+                Status_Dot.Fill = (SolidColorBrush)brush;
+        }
+
+        #endregion
+
+        #region Settings Persistence
+
+        private void SaveSettings()
+        {
+            var s = Windows.Storage.ApplicationData.Current.LocalSettings.Values;
+            s["Port"]        = Port_CmbBox.SelectedItem?.ToString();
+            s["BaudRate"]    = BaudR_CmbBox.SelectedIndex;
+            s["DataBits"]    = DataBits_CmbBox.SelectedIndex;
+            s["StopBits"]    = StopBits_CmbBox.SelectedIndex;
+            s["Parity"]      = Parity_CmbBox.SelectedIndex;
+            s["Encoding"]    = Encoding_CmbBox.SelectedIndex;
+            s["LineEnding"]  = LineEnding_CmbBox.SelectedIndex;
+            s["DtrEnable"]   = Dtr_ChcBox.IsChecked == true;
+            s["RtsEnable"]   = Rts_ChcBox.IsChecked == true;
+            s["Timestamp"]   = Timestamp_ChcBox.IsChecked == true;
+            s["HexView"]     = HexView_ChcBox.IsChecked == true;
+            s["AutoScroll"]  = AutoScroll_Btn.IsChecked == true;
+        }
+
+        private void LoadSettings()
+        {
+            var s = Windows.Storage.ApplicationData.Current.LocalSettings.Values;
+
+            // Restore port selection after populating the list
+            if (s.TryGetValue("Port", out object port) && port is string portName)
+                for (int i = 0; i < Port_CmbBox.Items.Count; i++)
+                    if (Port_CmbBox.Items[i].ToString() == portName)
+                    { Port_CmbBox.SelectedIndex = i; break; }
+
+            if (s.TryGetValue("BaudRate",   out object br)  && br  is int brIdx)  BaudR_CmbBox.SelectedIndex    = brIdx;
+            if (s.TryGetValue("DataBits",   out object db)  && db  is int dbIdx)  DataBits_CmbBox.SelectedIndex  = dbIdx;
+            if (s.TryGetValue("StopBits",   out object sb)  && sb  is int sbIdx)  StopBits_CmbBox.SelectedIndex  = sbIdx;
+            if (s.TryGetValue("Parity",     out object pa)  && pa  is int paIdx)  Parity_CmbBox.SelectedIndex    = paIdx;
+            if (s.TryGetValue("Encoding",   out object enc) && enc is int encIdx) Encoding_CmbBox.SelectedIndex  = encIdx;
+            if (s.TryGetValue("LineEnding", out object le)  && le  is int leIdx)  LineEnding_CmbBox.SelectedIndex = leIdx;
+
+            if (s.TryGetValue("DtrEnable",  out object dtr) && dtr is bool dtrVal) Dtr_ChcBox.IsChecked = dtrVal;
+            if (s.TryGetValue("RtsEnable",  out object rts) && rts is bool rtsVal) Rts_ChcBox.IsChecked = rtsVal;
+            if (s.TryGetValue("Timestamp",  out object ts)  && ts  is bool tsVal)  { Timestamp_ChcBox.IsChecked = tsVal; _timestampEnabled = tsVal; }
+            if (s.TryGetValue("HexView",    out object hv)  && hv  is bool hvVal)  { HexView_ChcBox.IsChecked   = hvVal; _hexViewEnabled   = hvVal; }
+            if (s.TryGetValue("AutoScroll", out object au)  && au  is bool auVal)  { AutoScroll_Btn.IsChecked   = auVal; _autoScroll       = auVal; }
+        }
+
+        #endregion
+
+        #region Helpers
+
+        private void LogError(string message)
+        {
+            // Capture timestamp on the calling thread (may be a background thread).
+            // _errorCount is incremented inside TryEnqueue so it stays on the UI thread,
+            // avoiding a data race with the read that follows immediately after.
+            string timestamp = DateTime.Now.ToString("HH:mm:ss");
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _errorCount++;
+                Error_TxtBox.Text          += $"[{timestamp}] {message}\n";
+                ErrorCount_Txt.Text         = _errorCount.ToString();
+                ErrorCount_Badge.Visibility = Visibility.Visible;
+            });
+        }
+
+        #endregion
     }
 }

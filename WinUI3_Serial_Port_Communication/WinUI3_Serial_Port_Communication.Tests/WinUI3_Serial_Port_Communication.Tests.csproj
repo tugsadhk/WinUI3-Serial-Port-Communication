@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Link pure-C# source files that have no WinUI dependency -->
+    <Compile Include="..\WinUI3_Serial_Port_Communication\SerialTerminalHelpers.cs" Link="SerialTerminalHelpers.cs"/>
+    <Compile Include="..\WinUI3_Serial_Port_Communication\SerialPortService.cs"     Link="SerialPortService.cs"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"  Version="17.9.0"/>
+    <PackageReference Include="System.IO.Ports"         Version="8.0.0"/>
+    <PackageReference Include="xunit"                   Version="2.7.0"/>
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
