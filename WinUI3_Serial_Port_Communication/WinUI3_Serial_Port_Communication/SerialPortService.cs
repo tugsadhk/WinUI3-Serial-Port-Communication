@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.IO;
 using System.IO.Ports;
@@ -6,25 +7,27 @@ namespace WinUI3_Serial_Port_Communication
 {
     public sealed class SerialPortConfig
     {
-        public string   PortName  { get; init; }
-        public int      BaudRate  { get; init; }
-        public int      DataBits  { get; init; } = 8;
-        public StopBits StopBits  { get; init; } = StopBits.One;
-        public Parity   Parity    { get; init; } = Parity.None;
-        public bool     DtrEnable { get; init; } = true;
-        public bool     RtsEnable { get; init; } = true;
+        public required string   PortName        { get; init; }
+        public required int      BaudRate        { get; init; }
+        public int               DataBits        { get; init; } = 8;
+        public StopBits          StopBits        { get; init; } = StopBits.One;
+        public Parity            Parity          { get; init; } = Parity.None;
+        public bool              DtrEnable       { get; init; } = true;
+        public bool              RtsEnable       { get; init; } = true;
+        public int               ReadTimeoutMs   { get; init; } = 500;
+        public int               WriteTimeoutMs  { get; init; } = 500;
     }
 
     public sealed class SerialPortService : IDisposable
     {
-        private SerialPort _port;
+        private SerialPort? _port;
         private readonly object _lock = new();
 
         public bool IsConnected { get { lock (_lock) { return _port?.IsOpen == true; } } }
 
-        public event EventHandler<byte[]> DataReceived;
-        public event EventHandler<string> ErrorOccurred;
-        public event EventHandler         ConnectionLost;
+        public event EventHandler<byte[]>? DataReceived;
+        public event EventHandler<string>? ErrorOccurred;
+        public event EventHandler?         ConnectionLost;
 
         // ------------------------------------------------------------------ //
         //  Connect / Disconnect                                               //
@@ -46,14 +49,26 @@ namespace WinUI3_Serial_Port_Communication
                     Parity       = cfg.Parity,
                     DtrEnable    = cfg.DtrEnable,
                     RtsEnable    = cfg.RtsEnable,
-                    ReadTimeout  = 500,
-                    WriteTimeout = 500
+                    ReadTimeout  = cfg.ReadTimeoutMs,
+                    WriteTimeout = cfg.WriteTimeoutMs
                 };
 
                 _port.DataReceived  += Port_DataReceived;
                 _port.ErrorReceived += Port_ErrorReceived;
-                _port.Open();
-                _port.DiscardInBuffer();
+                try
+                {
+                    _port.Open();
+                    _port.DiscardInBuffer();
+                }
+                catch
+                {
+                    // Open failed — clean up so the next Connect() doesn't leak this instance
+                    _port.DataReceived  -= Port_DataReceived;
+                    _port.ErrorReceived -= Port_ErrorReceived;
+                    _port.Dispose();
+                    _port = null;
+                    throw;
+                }
             }
         }
 
@@ -64,7 +79,8 @@ namespace WinUI3_Serial_Port_Communication
                 if (_port is null) return;
                 _port.DataReceived  -= Port_DataReceived;
                 _port.ErrorReceived -= Port_ErrorReceived;
-                try { if (_port.IsOpen) _port.Close(); } catch { }
+                try { _port.Dispose(); } catch { }
+                _port = null;
             }
         }
 
@@ -90,7 +106,7 @@ namespace WinUI3_Serial_Port_Communication
         {
             try
             {
-                SerialPort port;
+                SerialPort? port;
                 lock (_lock) { port = _port; }
                 if (port?.IsOpen != true) return;
 
@@ -134,8 +150,7 @@ namespace WinUI3_Serial_Port_Communication
 
         public void Dispose()
         {
-            Disconnect();
-            lock (_lock) { _port?.Dispose(); _port = null; }
+            Disconnect(); // unsubscribes, disposes, and nulls _port
         }
     }
 }

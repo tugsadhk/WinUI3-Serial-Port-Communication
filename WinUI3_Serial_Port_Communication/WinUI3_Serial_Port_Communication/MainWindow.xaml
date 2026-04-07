@@ -238,6 +238,7 @@
                             <Button Grid.Column="2"
                                     x:Name="Send_Btn"
                                     Click="Send_Button_Click"
+                                    IsEnabled="False"
                                     Style="{ThemeResource AccentButtonStyle}">Send</Button>
                         </Grid>
                     </Grid>
