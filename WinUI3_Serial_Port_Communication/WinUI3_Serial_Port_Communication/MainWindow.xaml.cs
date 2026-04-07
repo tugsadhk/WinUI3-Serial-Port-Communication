@@ -25,8 +25,8 @@ namespace WinUI3_Serial_Port_Communication
         private volatile bool _hexViewEnabled   = false;
         private volatile bool _autoScroll       = true;
 
-        private string            _lineEnding = "\r\n";
-        private volatile Encoding _encoding   = Encoding.UTF8;
+        private string   _lineEnding = "\r\n";
+        private Encoding _encoding   = Encoding.UTF8;
         private int      _txBytes    = 0;
         private int      _rxBytes    = 0;
         private int      _errorCount = 0;
@@ -178,7 +178,7 @@ namespace WinUI3_Serial_Port_Communication
 
                 AddToHistory(text);
                 Send_TxtBox.Text = string.Empty;
-                TxBytes_Txt.Text = $"TX: {SerialTerminalHelpers.FormatBytes(_txBytes)}";
+                TxBytes_Txt.Text = SerialTerminalHelpers.FormatBytes(_txBytes);
             }
             catch (Exception ex)
             {
@@ -210,7 +210,7 @@ namespace WinUI3_Serial_Port_Communication
                 if (scroll)
                     Receive_TxtBox.SelectionStart = Receive_TxtBox.Text.Length;
 
-                RxBytes_Txt.Text = $"RX: {SerialTerminalHelpers.FormatBytes(_rxBytes)}";
+                RxBytes_Txt.Text = SerialTerminalHelpers.FormatBytes(_rxBytes);
             });
         }
 
@@ -227,7 +227,6 @@ namespace WinUI3_Serial_Port_Communication
 
             DispatcherQueue.TryEnqueue(() =>
             {
-                FindConnectedPorts(); // device may have been removed; refresh the list
                 SetConnectionState(ConnectionState.Error);
                 LogError("Connection lost – device may have been disconnected.");
             });
@@ -323,17 +322,13 @@ namespace WinUI3_Serial_Port_Communication
             => _timestampEnabled = Timestamp_ChcBox.IsChecked == true;
 
         private void HexView_ChcBox_Click(object sender, RoutedEventArgs e)
-        {
-            _hexViewEnabled = HexView_ChcBox.IsChecked == true;
-            // Clear the buffer so old text (in the previous format) doesn't mix with new data.
-            Receive_TxtBox.Text = string.Empty;
-        }
+            => _hexViewEnabled = HexView_ChcBox.IsChecked == true;
 
         private void ClearReceive_Btn_Click(object sender, RoutedEventArgs e)
         {
             Receive_TxtBox.Text = string.Empty;
             _rxBytes            = 0;
-            RxBytes_Txt.Text    = "RX: 0 B";
+            RxBytes_Txt.Text    = SerialTerminalHelpers.FormatBytes(0);
         }
 
         private void ClearError_Btn_Click(object sender, RoutedEventArgs e)
@@ -407,12 +402,11 @@ namespace WinUI3_Serial_Port_Communication
 
         private void SetConnectionState(ConnectionState state)
         {
-            bool connected    = state == ConnectionState.Connected;
-            bool notConnected = !connected;
+            bool connected = state == ConnectionState.Connected;
 
+            bool notConnected = !connected;
             Connect_Btn.IsEnabled      = notConnected;
             Disconnect_Btn.IsEnabled   = connected;
-            Send_Btn.IsEnabled         = connected;
             Port_CmbBox.IsEnabled      = notConnected;
             Refresh_Btn.IsEnabled      = notConnected;
             BaudR_CmbBox.IsEnabled     = notConnected;
@@ -448,7 +442,7 @@ namespace WinUI3_Serial_Port_Communication
         private void SaveSettings()
         {
             var s = Windows.Storage.ApplicationData.Current.LocalSettings.Values;
-            s["Port"]        = Port_CmbBox.SelectedItem?.ToString() ?? string.Empty;
+            s["Port"]        = Port_CmbBox.SelectedItem?.ToString();
             s["BaudRate"]    = BaudR_CmbBox.SelectedIndex;
             s["DataBits"]    = DataBits_CmbBox.SelectedIndex;
             s["StopBits"]    = StopBits_CmbBox.SelectedIndex;

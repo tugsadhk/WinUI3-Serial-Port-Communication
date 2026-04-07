@@ -6,7 +6,7 @@ namespace WinUI3_Serial_Port_Communication
     {
         #region Fields
 
-        private Window _window;
+        private Window m_window;
 
         #endregion
 
@@ -23,8 +23,8 @@ namespace WinUI3_Serial_Port_Communication
 
         protected override void OnLaunched(LaunchActivatedEventArgs args)
         {
-            _window = new MainWindow();
-            _window.Activate();
+            m_window = new MainWindow();
+            m_window.Activate();
         }
 
         #endregion
