@@ -7,13 +7,13 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="0d8b5cbb-9659-4b3a-a22d-eb65c23d1ef0"
-    Publisher="CN=tugsa"
-    Version="1.0.0.0" />
+    Name="48017HtkSoftware.WinUI3SerialPortCommunication"
+    Publisher="CN=9AB5BFC6-6B33-43C6-8471-98F64516C642"
+    Version="2.0.5.0" />
 
   <Properties>
-    <DisplayName>WinUI3_Serial_Port_Communication (Package)</DisplayName>
-    <PublisherDisplayName>tugsa</PublisherDisplayName>
+    <DisplayName>WinUI 3 Serial Port Communication</DisplayName>
+    <PublisherDisplayName>Htk Software</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
