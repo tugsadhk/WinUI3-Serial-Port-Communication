@@ -37,7 +37,7 @@ namespace WinUI3_Serial_Port_Communication
                 if (_port?.IsOpen == true)
                     throw new InvalidOperationException("Already connected. Call Disconnect first.");
 
-                _port = new SerialPort
+                var port = new SerialPort
                 {
                     PortName     = cfg.PortName,
                     BaudRate     = cfg.BaudRate,
@@ -50,10 +50,21 @@ namespace WinUI3_Serial_Port_Communication
                     WriteTimeout = 500
                 };
 
-                _port.DataReceived  += Port_DataReceived;
-                _port.ErrorReceived += Port_ErrorReceived;
-                _port.Open();
-                _port.DiscardInBuffer();
+                try
+                {
+                    port.DataReceived  += Port_DataReceived;
+                    port.ErrorReceived += Port_ErrorReceived;
+                    port.Open();
+                    port.DiscardInBuffer();
+                    _port = port;
+                }
+                catch
+                {
+                    port.DataReceived  -= Port_DataReceived;
+                    port.ErrorReceived -= Port_ErrorReceived;
+                    port.Dispose();
+                    throw;
+                }
             }
         }
 
@@ -65,6 +76,8 @@ namespace WinUI3_Serial_Port_Communication
                 _port.DataReceived  -= Port_DataReceived;
                 _port.ErrorReceived -= Port_ErrorReceived;
                 try { if (_port.IsOpen) _port.Close(); } catch { }
+                _port.Dispose();
+                _port = null;
             }
         }
 
@@ -135,7 +148,6 @@ namespace WinUI3_Serial_Port_Communication
         public void Dispose()
         {
             Disconnect();
-            lock (_lock) { _port?.Dispose(); _port = null; }
         }
     }
 }

@@ -7,343 +7,346 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
+    <!-- ================================================================ -->
+    <!--  Two-column layout                                               -->
+    <!-- ================================================================ -->
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="280"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- ================================================================ -->
-        <!--  Two-column layout                                               -->
-        <!-- ================================================================ -->
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+        <!-- ============================================================ -->
+        <!--  LEFT  –  Settings Panel                                     -->
+        <!-- ============================================================ -->
+        <Border Grid.Column="0"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                BorderThickness="0,0,1,0"
+                Padding="16">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="8">
 
-            <!-- ============================================================ -->
-            <!--  LEFT  –  Settings Panel                                     -->
-            <!-- ============================================================ -->
-            <Border Grid.Column="0"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-                    BorderThickness="0,0,1,0"
-                    Padding="16">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="8">
+                    <TextBlock Text="Serial Port"
+                               Style="{ThemeResource SubtitleTextBlockStyle}"
+                               Margin="0,0,0,4"/>
 
-                        <TextBlock Text="Serial Port"
-                                   Style="{ThemeResource SubtitleTextBlockStyle}"
-                                   Margin="0,0,0,4"/>
+                    <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
+                    <!--  Port settings (disabled while connected)        -->
+                    <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
+                    <StackPanel x:Name="Settings_Panel" Spacing="8">
 
-                        <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
-                        <!--  Port settings (disabled while connected)        -->
-                        <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
-                        <StackPanel x:Name="Settings_Panel" Spacing="8">
+                        <!-- Port Selection -->
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="Port_CmbBox"
+                                      Grid.Column="0"
+                                      PlaceholderText="Select Port"
+                                      HorizontalAlignment="Stretch"
+                                      SelectionChanged="Port_CmbBox_SelectionChanged"/>
+                            <AppBarButton x:Name="Refresh_Btn"
+                                          Grid.Column="1"
+                                          Icon="Refresh"
+                                          Height="40" Width="40"
+                                          Click="Refresh_Btn_Click"
+                                          ToolTipService.ToolTip="Refresh Ports"/>
+                        </Grid>
 
-                            <!-- Port Selection -->
-                            <Grid ColumnSpacing="6">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ComboBox x:Name="Port_CmbBox"
-                                          Grid.Column="0"
-                                          PlaceholderText="Select Port"
-                                          HorizontalAlignment="Stretch"/>
-                                <AppBarButton x:Name="Refresh_Btn"
-                                              Grid.Column="1"
-                                              Icon="Refresh"
-                                              Height="40" Width="40"
-                                              Click="Refresh_Btn_Click"
-                                              ToolTipService.ToolTip="Refresh Ports"/>
-                            </Grid>
+                        <ComboBox x:Name="BaudR_CmbBox"
+                                  PlaceholderText="Baud Rate"
+                                  SelectedIndex="5"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem>4800</ComboBoxItem>
+                            <ComboBoxItem>9600</ComboBoxItem>
+                            <ComboBoxItem>19200</ComboBoxItem>
+                            <ComboBoxItem>38400</ComboBoxItem>
+                            <ComboBoxItem>57600</ComboBoxItem>
+                            <ComboBoxItem>115200</ComboBoxItem>
+                            <ComboBoxItem>128000</ComboBoxItem>
+                            <ComboBoxItem>921600</ComboBoxItem>
+                        </ComboBox>
 
-                            <ComboBox x:Name="BaudR_CmbBox"
-                                      PlaceholderText="Baud Rate"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBoxItem>4800</ComboBoxItem>
-                                <ComboBoxItem>9600</ComboBoxItem>
-                                <ComboBoxItem>19200</ComboBoxItem>
-                                <ComboBoxItem>38400</ComboBoxItem>
-                                <ComboBoxItem>57600</ComboBoxItem>
-                                <ComboBoxItem>115200</ComboBoxItem>
-                                <ComboBoxItem>128000</ComboBoxItem>
-                                <ComboBoxItem>921600</ComboBoxItem>
-                            </ComboBox>
+                        <ComboBox x:Name="DataBits_CmbBox"
+                                  PlaceholderText="Data Bits"
+                                  SelectedIndex="3"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem>5</ComboBoxItem>
+                            <ComboBoxItem>6</ComboBoxItem>
+                            <ComboBoxItem>7</ComboBoxItem>
+                            <ComboBoxItem>8</ComboBoxItem>
+                        </ComboBox>
 
-                            <ComboBox x:Name="DataBits_CmbBox"
-                                      PlaceholderText="Data Bits"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBoxItem>5</ComboBoxItem>
-                                <ComboBoxItem>6</ComboBoxItem>
-                                <ComboBoxItem>7</ComboBoxItem>
-                                <ComboBoxItem>8</ComboBoxItem>
-                            </ComboBox>
+                        <ComboBox x:Name="StopBits_CmbBox"
+                                  PlaceholderText="Stop Bits"
+                                  SelectedIndex="0"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem>1</ComboBoxItem>
+                            <ComboBoxItem>1.5</ComboBoxItem>
+                            <ComboBoxItem>2</ComboBoxItem>
+                        </ComboBox>
 
-                            <ComboBox x:Name="StopBits_CmbBox"
-                                      PlaceholderText="Stop Bits"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBoxItem>1</ComboBoxItem>
-                                <ComboBoxItem>1.5</ComboBoxItem>
-                                <ComboBoxItem>2</ComboBoxItem>
-                            </ComboBox>
+                        <ComboBox x:Name="Parity_CmbBox"
+                                  PlaceholderText="Parity"
+                                  SelectedIndex="0"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem>None</ComboBoxItem>
+                            <ComboBoxItem>Odd</ComboBoxItem>
+                            <ComboBoxItem>Even</ComboBoxItem>
+                            <ComboBoxItem>Mark</ComboBoxItem>
+                            <ComboBoxItem>Space</ComboBoxItem>
+                        </ComboBox>
 
-                            <ComboBox x:Name="Parity_CmbBox"
-                                      PlaceholderText="Parity"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBoxItem>None</ComboBoxItem>
-                                <ComboBoxItem>Odd</ComboBoxItem>
-                                <ComboBoxItem>Even</ComboBoxItem>
-                                <ComboBoxItem>Mark</ComboBoxItem>
-                                <ComboBoxItem>Space</ComboBoxItem>
-                            </ComboBox>
+                        <ComboBox x:Name="Encoding_CmbBox"
+                                  SelectionChanged="Encoding_CmbBox_SelectionChanged"
+                                  PlaceholderText="Encoding"
+                                  SelectedIndex="0"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem>UTF-8</ComboBoxItem>
+                            <ComboBoxItem>ASCII</ComboBoxItem>
+                            <ComboBoxItem>Latin-1 (ISO-8859-1)</ComboBoxItem>
+                        </ComboBox>
 
-                            <ComboBox x:Name="Encoding_CmbBox"
-                                      SelectionChanged="Encoding_CmbBox_SelectionChanged"
-                                      PlaceholderText="Encoding"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBoxItem>UTF-8</ComboBoxItem>
-                                <ComboBoxItem>ASCII</ComboBoxItem>
-                                <ComboBoxItem>Latin-1 (ISO-8859-1)</ComboBoxItem>
-                            </ComboBox>
-
-                            <Rectangle Height="1"
-                                       Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                       Margin="0,2"/>
-
-                            <StackPanel Orientation="Horizontal" Spacing="16">
-                                <CheckBox x:Name="Dtr_ChcBox" Content="DTR" IsChecked="True"/>
-                                <CheckBox x:Name="Rts_ChcBox" Content="RTS" IsChecked="True"/>
-                            </StackPanel>
-
-                        </StackPanel>
-
-                        <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
-                        <!--  Status badge                                    -->
-                        <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
                         <Rectangle Height="1"
                                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
                                    Margin="0,2"/>
 
-                        <Border CornerRadius="6"
-                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                                Padding="10,7">
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <Ellipse x:Name="Status_Dot"
-                                         Width="9" Height="9"
-                                         VerticalAlignment="Center"
-                                         Fill="{ThemeResource SystemFillColorNeutralBrush}"/>
-                                <TextBlock x:Name="Status_Txt"
-                                           Text="Disconnected"
-                                           VerticalAlignment="Center"
-                                           FontSize="13"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Connect / Disconnect -->
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button x:Name="Connect_Btn"
-                                    Grid.Column="0"
-                                    Click="Connect_Button_Click"
-                                    HorizontalAlignment="Stretch"
-                                    Style="{ThemeResource AccentButtonStyle}">Connect</Button>
-                            <Button x:Name="Disconnect_Btn"
-                                    Grid.Column="1"
-                                    Click="Disconnect_Button_Click"
-                                    HorizontalAlignment="Stretch"
-                                    IsEnabled="False">Disconnect</Button>
-                        </Grid>
-
-                        <!-- Footer -->
-                        <TextBlock FontSize="12"
-                                   Opacity="0.45"
-                                   Margin="0,24,0,0">
-                            made by htk →
-                            <Hyperlink NavigateUri="https://github.com/tugsadhk/Serial-Port-Communication-WinUI-3">
-                                <Underline>GitHub</Underline>
-                            </Hyperlink>
-                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <CheckBox x:Name="Dtr_ChcBox" Content="DTR" IsChecked="True"/>
+                            <CheckBox x:Name="Rts_ChcBox" Content="RTS" IsChecked="True"/>
+                        </StackPanel>
 
                     </StackPanel>
-                </ScrollViewer>
-            </Border>
 
-            <!-- ============================================================ -->
-            <!--  RIGHT  –  Communication Panel                               -->
-            <!-- ============================================================ -->
-            <Grid Grid.Column="1" Padding="16" RowSpacing="12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="180"/>
-                </Grid.RowDefinitions>
+                    <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
+                    <!--  Status badge                                    -->
+                    <!-- - - - - - - - - - - - - - - - - - - - - - - - - -->
+                    <Rectangle Height="1"
+                               Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                               Margin="0,2"/>
 
-                <!-- ======================================================== -->
-                <!--  Row 0 - Send | Receive                                  -->
-                <!-- ======================================================== -->
-                <Grid Grid.Row="0" ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Send -->
-                    <Grid Grid.Column="0" RowSpacing="8">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- Send header -->
-                        <TextBlock Grid.Row="0"
-                                   Text="Send"
-                                   Style="{ThemeResource CaptionTextBlockStyle}"
-                                   Margin="0,0,0,2"/>
-
-                        <TextBox Grid.Row="1"
-                                 x:Name="Send_TxtBox"
-                                 TextWrapping="Wrap"
-                                 AcceptsReturn="False"
-                                 VerticalAlignment="Stretch"
-                                 VerticalContentAlignment="Top"
-                                 PlaceholderText="Type here… Enter to send, Shift+Enter for new line, ↑↓ for history"
-                                 KeyDown="Send_TxtBox_KeyDown"/>
-
-                        <!-- Send toolbar -->
-                        <Grid Grid.Row="2" ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <ComboBox x:Name="LineEnding_CmbBox"
-                                      Grid.Column="0"
-                                      SelectionChanged="LineEnding_CmbBox_SelectionChanged"
-                                      SelectedIndex="3"
-                                      ToolTipService.ToolTip="Line Ending">
-                                <ComboBoxItem>None</ComboBoxItem>
-                                <ComboBoxItem>CR</ComboBoxItem>
-                                <ComboBoxItem>LF</ComboBoxItem>
-                                <ComboBoxItem>CR+LF</ComboBoxItem>
-                            </ComboBox>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="TxBytes_Txt"
-                                       Text="TX: 0 B"
+                    <Border CornerRadius="6"
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            Padding="10,7">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Ellipse x:Name="Status_Dot"
+                                     Width="9" Height="9"
+                                     VerticalAlignment="Center"
+                                     Fill="{ThemeResource SystemFillColorNeutralBrush}"/>
+                            <TextBlock x:Name="Status_Txt"
+                                       Text="Disconnected"
                                        VerticalAlignment="Center"
-                                       HorizontalAlignment="Right"
-                                       FontSize="12"
-                                       Opacity="0.6"/>
-                            <Button Grid.Column="2"
-                                    x:Name="Send_Btn"
-                                    Click="Send_Button_Click"
-                                    Style="{ThemeResource AccentButtonStyle}">Send</Button>
-                        </Grid>
+                                       FontSize="13"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Connect / Disconnect -->
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="Connect_Btn"
+                                Grid.Column="0"
+                                Click="Connect_Button_Click"
+                                HorizontalAlignment="Stretch"
+                                Style="{ThemeResource AccentButtonStyle}">Connect</Button>
+                        <Button x:Name="Disconnect_Btn"
+                                Grid.Column="1"
+                                Click="Disconnect_Button_Click"
+                                HorizontalAlignment="Stretch"
+                                IsEnabled="False">Disconnect</Button>
                     </Grid>
 
-                    <!-- Receive -->
-                    <Grid Grid.Column="1" RowSpacing="6">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+                    <!-- Footer -->
+                    <TextBlock FontSize="12"
+                               Opacity="0.45"
+                               Margin="0,24,0,0">
+                        made by htk →
+                        <Hyperlink NavigateUri="https://github.com/tugsadhk/Serial-Port-Communication-WinUI-3">
+                            <Underline>GitHub</Underline>
+                        </Hyperlink>
+                    </TextBlock>
 
-                        <!-- Receive toolbar -->
-                        <Grid Grid.Row="0">
-                            <TextBlock Text="Receive"
-                                       Style="{ThemeResource CaptionTextBlockStyle}"
-                                       VerticalAlignment="Center"/>
-                            <StackPanel Orientation="Horizontal"
-                                        HorizontalAlignment="Right"
-                                        Spacing="4">
-                                <ToggleButton x:Name="AutoScroll_Btn"
-                                              IsChecked="True"
-                                              Padding="8,4"
-                                              Click="AutoScroll_Btn_Click"
-                                              ToolTipService.ToolTip="Auto-scroll to bottom">
-                                    <FontIcon Glyph="&#xE96E;" FontSize="12"/>
-                                </ToggleButton>
-                                <CheckBox x:Name="Timestamp_ChcBox"
-                                          Content="Timestamp"
-                                          Click="Timestamp_ChcBox_Click"
-                                          VerticalAlignment="Center"/>
-                                <CheckBox x:Name="HexView_ChcBox"
-                                          Content="Hex"
-                                          Click="HexView_ChcBox_Click"
-                                          VerticalAlignment="Center"/>
-                                <TextBlock x:Name="RxBytes_Txt"
-                                           Text="RX: 0 B"
-                                           VerticalAlignment="Center"
-                                           FontSize="12"
-                                           Opacity="0.6"/>
-                                <Button Click="ClearReceive_Btn_Click"
-                                        Padding="8,4"
-                                        ToolTipService.ToolTip="Clear">
-                                    <FontIcon Glyph="&#xE711;" FontSize="12"/>
-                                </Button>
-                                <Button Click="SaveReceive_Btn_Click"
-                                        Padding="8,4"
-                                        ToolTipService.ToolTip="Save to file">
-                                    <FontIcon Glyph="&#xE74E;" FontSize="12"/>
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
 
-                        <TextBox Grid.Row="1"
-                                 x:Name="Receive_TxtBox"
-                                 TextWrapping="Wrap"
-                                 AcceptsReturn="True"
-                                 IsReadOnly="True"
-                                 VerticalAlignment="Stretch"
-                                 VerticalContentAlignment="Top"/>
+        <!-- ============================================================ -->
+        <!--  RIGHT  –  Communication Panel                               -->
+        <!-- ============================================================ -->
+        <Grid Grid.Column="1" Padding="16" RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="180"/>
+            </Grid.RowDefinitions>
+
+            <!-- ======================================================== -->
+            <!--  Row 0 - Send | Receive                                  -->
+            <!-- ======================================================== -->
+            <Grid Grid.Row="0" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Send -->
+                <Grid Grid.Column="0" RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Send header -->
+                    <TextBlock Grid.Row="0"
+                               Text="Send"
+                               Style="{ThemeResource CaptionTextBlockStyle}"
+                               Margin="0,0,0,2"/>
+
+                    <TextBox Grid.Row="1"
+                             x:Name="Send_TxtBox"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="False"
+                             VerticalAlignment="Stretch"
+                             VerticalContentAlignment="Top"
+                             PlaceholderText="Type here… Enter to send, Shift+Enter for new line, ↑↓ for history"
+                             KeyDown="Send_TxtBox_KeyDown"/>
+
+                    <!-- Send toolbar -->
+                    <Grid Grid.Row="2" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="LineEnding_CmbBox"
+                                  Grid.Column="0"
+                                  SelectionChanged="LineEnding_CmbBox_SelectionChanged"
+                                  SelectedIndex="3"
+                                  ToolTipService.ToolTip="Line Ending">
+                            <ComboBoxItem>None</ComboBoxItem>
+                            <ComboBoxItem>CR</ComboBoxItem>
+                            <ComboBoxItem>LF</ComboBoxItem>
+                            <ComboBoxItem>CR+LF</ComboBoxItem>
+                        </ComboBox>
+                        <TextBlock Grid.Column="1"
+                                   x:Name="TxBytes_Txt"
+                                   Text="TX: 0 B"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   FontSize="12"
+                                   Opacity="0.6"/>
+                        <Button Grid.Column="2"
+                                x:Name="Send_Btn"
+                                Click="Send_Button_Click"
+                                Style="{ThemeResource AccentButtonStyle}">Send</Button>
                     </Grid>
                 </Grid>
 
-                <!-- ======================================================== -->
-                <!--  Row 1 - Error Log                                       -->
-                <!-- ======================================================== -->
-                <Grid Grid.Row="1" RowSpacing="6">
+                <!-- Receive -->
+                <Grid Grid.Column="1" RowSpacing="6">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Error toolbar -->
+                    <!-- Receive toolbar -->
                     <Grid Grid.Row="0">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <TextBlock Text="Error Log"
-                                       Style="{ThemeResource CaptionTextBlockStyle}"
-                                       VerticalAlignment="Center"/>
-                            <Border x:Name="ErrorCount_Badge"
-                                    CornerRadius="10"
-                                    Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
-                                    Padding="6,1"
-                                    Visibility="Collapsed">
-                                <TextBlock x:Name="ErrorCount_Txt"
-                                           Text="0"
-                                           FontSize="11"
-                                           Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
-                            </Border>
+                        <TextBlock Text="Receive"
+                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="4">
+                            <ToggleButton x:Name="AutoScroll_Btn"
+                                          IsChecked="True"
+                                          Padding="8,4"
+                                          Click="AutoScroll_Btn_Click"
+                                          ToolTipService.ToolTip="Auto-scroll to bottom">
+                                <FontIcon Glyph="&#xE96E;" FontSize="12"/>
+                            </ToggleButton>
+                            <CheckBox x:Name="Timestamp_ChcBox"
+                                      Content="Timestamp"
+                                      Click="Timestamp_ChcBox_Click"
+                                      VerticalAlignment="Center"/>
+                            <CheckBox x:Name="HexView_ChcBox"
+                                      Content="Hex"
+                                      Click="HexView_ChcBox_Click"
+                                      VerticalAlignment="Center"/>
+                            <TextBlock x:Name="RxBytes_Txt"
+                                       Text="RX: 0 B"
+                                       VerticalAlignment="Center"
+                                       FontSize="12"
+                                       Opacity="0.6"/>
+                            <Button Click="ClearReceive_Btn_Click"
+                                    Padding="8,4"
+                                    ToolTipService.ToolTip="Clear">
+                                <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                            </Button>
+                            <Button Click="SaveReceive_Btn_Click"
+                                    Padding="8,4"
+                                    ToolTipService.ToolTip="Save to file">
+                                <FontIcon Glyph="&#xE74E;" FontSize="12"/>
+                            </Button>
                         </StackPanel>
-                        <Button HorizontalAlignment="Right"
-                                Click="ClearError_Btn_Click"
-                                Padding="8,4"
-                                ToolTipService.ToolTip="Clear">
-                            <FontIcon Glyph="&#xE711;" FontSize="12"/>
-                        </Button>
                     </Grid>
 
                     <TextBox Grid.Row="1"
-                             x:Name="Error_TxtBox"
+                             x:Name="Receive_TxtBox"
                              TextWrapping="Wrap"
                              AcceptsReturn="True"
                              IsReadOnly="True"
                              VerticalAlignment="Stretch"
                              VerticalContentAlignment="Top"/>
                 </Grid>
-
             </Grid>
+
+            <!-- ======================================================== -->
+            <!--  Row 1 - Error Log                                       -->
+            <!-- ======================================================== -->
+            <Grid Grid.Row="1" RowSpacing="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Error toolbar -->
+                <Grid Grid.Row="0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock Text="Error Log"
+                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                   VerticalAlignment="Center"/>
+                        <Border x:Name="ErrorCount_Badge"
+                                CornerRadius="10"
+                                Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                                Padding="6,1"
+                                Visibility="Collapsed">
+                            <TextBlock x:Name="ErrorCount_Txt"
+                                       Text="0"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                        </Border>
+                    </StackPanel>
+                    <Button HorizontalAlignment="Right"
+                            Click="ClearError_Btn_Click"
+                            Padding="8,4"
+                            ToolTipService.ToolTip="Clear">
+                        <FontIcon Glyph="&#xE711;" FontSize="12"/>
+                    </Button>
+                </Grid>
+
+                <TextBox Grid.Row="1"
+                         x:Name="Error_TxtBox"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         IsReadOnly="True"
+                         VerticalAlignment="Stretch"
+                         VerticalContentAlignment="Top"/>
+            </Grid>
+
         </Grid>
     </Grid>
 </Window>

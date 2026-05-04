@@ -22,23 +22,26 @@ namespace WinUI3_Serial_Port_Communication
 
         // Settings (written from UI thread, read from DataReceived thread → volatile)
         private volatile bool _timestampEnabled = false;
-        private volatile bool _hexViewEnabled   = false;
-        private volatile bool _autoScroll       = true;
+        private volatile bool _hexViewEnabled = false;
+        private volatile bool _autoScroll = true;
 
-        private string   _lineEnding = "\r\n";
-        private Encoding _encoding   = Encoding.UTF8;
-        private int      _txBytes    = 0;
-        private int      _rxBytes    = 0;
-        private int      _errorCount = 0;
+        private ScrollViewer _receiveScrollViewer;
+
+        private string _lineEnding = "\r\n";
+        private Encoding _encoding = Encoding.UTF8;
+        private int _txBytes = 0;
+        private int _rxBytes = 0;
+        private int _errorCount = 0;
 
         // Send history
         private readonly List<string> _sendHistory = new();
-        private int    _historyIndex = -1;
+        private int _historyIndex = -1;
         private string _historyDraft = string.Empty;
         private const int MaxHistorySize = 50;
 
-        // Receive buffer limit (line count)
+        // Receive/error buffer limits (line count)
         private const int MaxReceiveLines = 500;
+        private const int MaxErrorLines = 200;
 
         private enum ConnectionState { Disconnected, Connected, Error }
 
@@ -49,7 +52,7 @@ namespace WinUI3_Serial_Port_Communication
         public MainWindow()
         {
             this.InitializeComponent();
-            this.Title  = "Serial Communication  ·  WinUI 3";
+            this.Title = "Serial Communication  ·  WinUI 3";
             this.Closed += MainWindow_Closed;
 
             // Mica backdrop (Win 11), graceful fallback to Acrylic (Win 10)
@@ -59,9 +62,16 @@ namespace WinUI3_Serial_Port_Communication
                 this.SystemBackdrop = new Microsoft.UI.Xaml.Media.DesktopAcrylicBackdrop();
 
             // Wire service events
-            _service.DataReceived  += Service_DataReceived;
+            _service.DataReceived += Service_DataReceived;
             _service.ErrorOccurred += Service_ErrorOccurred;
             _service.ConnectionLost += Service_ConnectionLost;
+
+            Receive_TxtBox.Loaded += (_, _) =>
+            {
+                _receiveScrollViewer = FindDescendant<ScrollViewer>(Receive_TxtBox);
+                if (_receiveScrollViewer is not null)
+                    _receiveScrollViewer.ViewChanged += ReceiveScrollViewer_ViewChanged;
+            };
 
             FindConnectedPorts();
             LoadSettings();
@@ -87,29 +97,31 @@ namespace WinUI3_Serial_Port_Communication
             {
                 await new ContentDialog
                 {
-                    Title         = "Missing Configuration",
-                    Content       = "Please select a port and baud rate.",
+                    Title = "Missing Configuration",
+                    Content = "Please select a port and baud rate.",
                     CloseButtonText = "OK",
-                    XamlRoot      = this.Content.XamlRoot
+                    XamlRoot = this.Content.XamlRoot
                 }.ShowAsync();
                 return;
             }
 
             var cfg = new SerialPortConfig
             {
-                PortName  = Port_CmbBox.SelectedItem.ToString(),
-                BaudRate  = int.Parse(((ComboBoxItem)BaudR_CmbBox.SelectedItem).Content.ToString()),
-                DataBits  = DataBits_CmbBox.SelectedIndex >= 0
+                PortName = Port_CmbBox.SelectedItem is PortItem pi
+                                ? pi.PortName
+                                : Port_CmbBox.SelectedItem.ToString(),
+                BaudRate = int.Parse(((ComboBoxItem)BaudR_CmbBox.SelectedItem).Content.ToString()),
+                DataBits = DataBits_CmbBox.SelectedIndex >= 0
                                 ? int.Parse(((ComboBoxItem)DataBits_CmbBox.SelectedItem).Content.ToString())
                                 : 8,
-                StopBits  = StopBits_CmbBox.SelectedIndex switch
+                StopBits = StopBits_CmbBox.SelectedIndex switch
                 {
-                    1     => StopBits.OnePointFive,
-                    2     => StopBits.Two,
-                    _     => StopBits.One
+                    1 => StopBits.OnePointFive,
+                    2 => StopBits.Two,
+                    _ => StopBits.One
                 },
-                Parity    = Parity_CmbBox.SelectedIndex >= 0 && Parity_CmbBox.SelectedItem is ComboBoxItem pi
-                                ? Enum.TryParse(pi.Content.ToString(), out Parity p) ? p : Parity.None
+                Parity = Parity_CmbBox.SelectedIndex >= 0 && Parity_CmbBox.SelectedItem is ComboBoxItem comboItem
+                                ? Enum.TryParse(comboItem.Content.ToString(), out Parity p) ? p : Parity.None
                                 : Parity.None,
                 DtrEnable = Dtr_ChcBox.IsChecked == true,
                 RtsEnable = Rts_ChcBox.IsChecked == true
@@ -137,16 +149,16 @@ namespace WinUI3_Serial_Port_Communication
 
         private void FindConnectedPorts()
         {
-            string selected = Port_CmbBox.SelectedItem?.ToString();
-            Port_CmbBox.Items.Clear();
-            foreach (string port in SerialPort.GetPortNames())
-                Port_CmbBox.Items.Add(port);
+            string selected = (Port_CmbBox.SelectedItem as PortItem)?.PortName
+                           ?? Port_CmbBox.SelectedItem?.ToString();
 
-            // Restore previous selection when possible
-            if (selected != null)
-                for (int i = 0; i < Port_CmbBox.Items.Count; i++)
-                    if (Port_CmbBox.Items[i].ToString() == selected)
-                    { Port_CmbBox.SelectedIndex = i; break; }
+            Port_CmbBox.Items.Clear();
+            foreach (var item in SerialPortDetector.GetPorts())
+            {
+                Port_CmbBox.Items.Add(item);
+                if (item.PortName == selected)
+                    Port_CmbBox.SelectedItem = item;
+            }
         }
 
         #endregion
@@ -159,10 +171,10 @@ namespace WinUI3_Serial_Port_Communication
             {
                 await new ContentDialog
                 {
-                    Title           = "Not Connected",
-                    Content         = "Open the serial port first.",
+                    Title = "Not Connected",
+                    Content = "Open the serial port first.",
                     CloseButtonText = "OK",
-                    XamlRoot        = this.Content.XamlRoot
+                    XamlRoot = this.Content.XamlRoot
                 }.ShowAsync();
                 return;
             }
@@ -178,7 +190,7 @@ namespace WinUI3_Serial_Port_Communication
 
                 AddToHistory(text);
                 Send_TxtBox.Text = string.Empty;
-                TxBytes_Txt.Text = SerialTerminalHelpers.FormatBytes(_txBytes);
+                TxBytes_Txt.Text = "TX: " + SerialTerminalHelpers.FormatBytes(_txBytes);
             }
             catch (Exception ex)
             {
@@ -188,14 +200,15 @@ namespace WinUI3_Serial_Port_Communication
 
         private void Service_DataReceived(object sender, byte[] buffer)
         {
-            bool   hex       = _hexViewEnabled;
-            bool   ts        = _timestampEnabled;
-            bool   scroll    = _autoScroll;
-            int    len       = buffer.Length;
+            bool hex = _hexViewEnabled;
+            bool ts = _timestampEnabled;
+            bool scroll = _autoScroll;
+            Encoding encoding = _encoding;
+            int len = buffer.Length;
 
             string text = hex
                 ? BitConverter.ToString(buffer).Replace("-", " ")
-                : _encoding.GetString(buffer);
+                : encoding.GetString(buffer);
 
             string prefix = ts ? $"[{DateTime.Now:HH:mm:ss.fff}] " : string.Empty;
 
@@ -210,7 +223,7 @@ namespace WinUI3_Serial_Port_Communication
                 if (scroll)
                     Receive_TxtBox.SelectionStart = Receive_TxtBox.Text.Length;
 
-                RxBytes_Txt.Text = SerialTerminalHelpers.FormatBytes(_rxBytes);
+                RxBytes_Txt.Text = "RX: " + SerialTerminalHelpers.FormatBytes(_rxBytes);
             });
         }
 
@@ -277,7 +290,7 @@ namespace WinUI3_Serial_Port_Communication
                 }
                 else
                 {
-                    _historyIndex    = -1;
+                    _historyIndex = -1;
                     Send_TxtBox.Text = _historyDraft;
                 }
             }
@@ -293,13 +306,29 @@ namespace WinUI3_Serial_Port_Communication
         private void Refresh_Btn_Click(object sender, RoutedEventArgs e)
             => FindConnectedPorts();
 
+        private void Port_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (Port_CmbBox.SelectedItem is not PortItem { FriendlyName.Length: > 0 } item) return;
+
+            int baud = SerialPortDetector.SuggestBaudRate(item.FriendlyName);
+            for (int i = 0; i < BaudR_CmbBox.Items.Count; i++)
+            {
+                if (BaudR_CmbBox.Items[i] is ComboBoxItem ci &&
+                    int.TryParse(ci.Content?.ToString(), out int b) && b == baud)
+                {
+                    BaudR_CmbBox.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
         private void Encoding_CmbBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             _encoding = Encoding_CmbBox.SelectedIndex switch
             {
-                1     => Encoding.ASCII,
-                2     => Encoding.Latin1,
-                _     => Encoding.UTF8
+                1 => Encoding.ASCII,
+                2 => Encoding.Latin1,
+                _ => Encoding.UTF8
             };
         }
 
@@ -307,12 +336,22 @@ namespace WinUI3_Serial_Port_Communication
         {
             _lineEnding = LineEnding_CmbBox.SelectedIndex switch
             {
-                0     => "",
-                1     => "\r",
-                2     => "\n",
-                3     => "\r\n",
-                _     => "\r\n"
+                0 => "",
+                1 => "\r",
+                2 => "\n",
+                3 => "\r\n",
+                _ => "\r\n"
             };
+        }
+
+        private void ReceiveScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
+        {
+            if (e.IsIntermediate) return;
+            var sv = (ScrollViewer)sender;
+            bool atBottom = sv.VerticalOffset >= sv.ScrollableHeight - 5.0;
+            if (_autoScroll == atBottom) return;
+            _autoScroll = atBottom;
+            AutoScroll_Btn.IsChecked = atBottom;
         }
 
         private void AutoScroll_Btn_Click(object sender, RoutedEventArgs e)
@@ -327,14 +366,14 @@ namespace WinUI3_Serial_Port_Communication
         private void ClearReceive_Btn_Click(object sender, RoutedEventArgs e)
         {
             Receive_TxtBox.Text = string.Empty;
-            _rxBytes            = 0;
-            RxBytes_Txt.Text    = SerialTerminalHelpers.FormatBytes(0);
+            _rxBytes = 0;
+            RxBytes_Txt.Text = "RX: 0 B";
         }
 
         private void ClearError_Btn_Click(object sender, RoutedEventArgs e)
         {
-            Error_TxtBox.Text          = string.Empty;
-            _errorCount                = 0;
+            Error_TxtBox.Text = string.Empty;
+            _errorCount = 0;
             ErrorCount_Badge.Visibility = Visibility.Collapsed;
         }
 
@@ -367,24 +406,24 @@ namespace WinUI3_Serial_Port_Communication
             switch (e.Key)
             {
                 case VirtualKey.Enter:
-                {
-                    bool shift = (Microsoft.UI.Input.InputKeyboardSource
-                        .GetKeyStateForCurrentThread(VirtualKey.Shift) & CoreVirtualKeyStates.Down) != 0;
+                    {
+                        bool shift = (Microsoft.UI.Input.InputKeyboardSource
+                            .GetKeyStateForCurrentThread(VirtualKey.Shift) & CoreVirtualKeyStates.Down) != 0;
 
-                    if (shift)
-                    {
-                        // Insert newline at cursor position
-                        int pos = Send_TxtBox.SelectionStart;
-                        Send_TxtBox.Text = Send_TxtBox.Text.Insert(pos, "\n");
-                        Send_TxtBox.SelectionStart = pos + 1;
+                        if (shift)
+                        {
+                            // Insert newline at cursor position
+                            int pos = Send_TxtBox.SelectionStart;
+                            Send_TxtBox.Text = Send_TxtBox.Text.Insert(pos, "\n");
+                            Send_TxtBox.SelectionStart = pos + 1;
+                        }
+                        else
+                        {
+                            Send_Button_Click(sender, e);
+                        }
+                        e.Handled = true;
+                        break;
                     }
-                    else
-                    {
-                        Send_Button_Click(sender, e);
-                    }
-                    e.Handled = true;
-                    break;
-                }
                 case VirtualKey.Up:
                     NavigateHistory(-1);
                     e.Handled = true;
@@ -405,30 +444,30 @@ namespace WinUI3_Serial_Port_Communication
             bool connected = state == ConnectionState.Connected;
 
             bool notConnected = !connected;
-            Connect_Btn.IsEnabled      = notConnected;
-            Disconnect_Btn.IsEnabled   = connected;
-            Port_CmbBox.IsEnabled      = notConnected;
-            Refresh_Btn.IsEnabled      = notConnected;
-            BaudR_CmbBox.IsEnabled     = notConnected;
-            DataBits_CmbBox.IsEnabled  = notConnected;
-            StopBits_CmbBox.IsEnabled  = notConnected;
-            Parity_CmbBox.IsEnabled    = notConnected;
-            Encoding_CmbBox.IsEnabled  = notConnected;
-            Dtr_ChcBox.IsEnabled       = notConnected;
-            Rts_ChcBox.IsEnabled       = notConnected;
+            Connect_Btn.IsEnabled = notConnected;
+            Disconnect_Btn.IsEnabled = connected;
+            Port_CmbBox.IsEnabled = notConnected;
+            Refresh_Btn.IsEnabled = notConnected;
+            BaudR_CmbBox.IsEnabled = notConnected;
+            DataBits_CmbBox.IsEnabled = notConnected;
+            StopBits_CmbBox.IsEnabled = notConnected;
+            Parity_CmbBox.IsEnabled = notConnected;
+            Encoding_CmbBox.IsEnabled = notConnected;
+            Dtr_ChcBox.IsEnabled = notConnected;
+            Rts_ChcBox.IsEnabled = notConnected;
 
             Status_Txt.Text = state switch
             {
-                ConnectionState.Connected    => "Connected",
-                ConnectionState.Error        => "Error",
-                _                            => "Disconnected"
+                ConnectionState.Connected => "Connected",
+                ConnectionState.Error => "Error",
+                _ => "Disconnected"
             };
 
             string brushKey = state switch
             {
                 ConnectionState.Connected => "SystemFillColorSuccessBrush",
-                ConnectionState.Error     => "SystemFillColorCriticalBrush",
-                _                         => "SystemFillColorNeutralBrush"
+                ConnectionState.Error => "SystemFillColorCriticalBrush",
+                _ => "SystemFillColorNeutralBrush"
             };
 
             if (Application.Current.Resources.TryGetValue(brushKey, out object brush))
@@ -442,47 +481,64 @@ namespace WinUI3_Serial_Port_Communication
         private void SaveSettings()
         {
             var s = Windows.Storage.ApplicationData.Current.LocalSettings.Values;
-            s["Port"]        = Port_CmbBox.SelectedItem?.ToString();
-            s["BaudRate"]    = BaudR_CmbBox.SelectedIndex;
-            s["DataBits"]    = DataBits_CmbBox.SelectedIndex;
-            s["StopBits"]    = StopBits_CmbBox.SelectedIndex;
-            s["Parity"]      = Parity_CmbBox.SelectedIndex;
-            s["Encoding"]    = Encoding_CmbBox.SelectedIndex;
-            s["LineEnding"]  = LineEnding_CmbBox.SelectedIndex;
-            s["DtrEnable"]   = Dtr_ChcBox.IsChecked == true;
-            s["RtsEnable"]   = Rts_ChcBox.IsChecked == true;
-            s["Timestamp"]   = Timestamp_ChcBox.IsChecked == true;
-            s["HexView"]     = HexView_ChcBox.IsChecked == true;
-            s["AutoScroll"]  = AutoScroll_Btn.IsChecked == true;
+            s["Port"] = (Port_CmbBox.SelectedItem as PortItem)?.PortName
+                              ?? Port_CmbBox.SelectedItem?.ToString();
+            s["BaudRate"] = BaudR_CmbBox.SelectedIndex;
+            s["DataBits"] = DataBits_CmbBox.SelectedIndex;
+            s["StopBits"] = StopBits_CmbBox.SelectedIndex;
+            s["Parity"] = Parity_CmbBox.SelectedIndex;
+            s["Encoding"] = Encoding_CmbBox.SelectedIndex;
+            s["LineEnding"] = LineEnding_CmbBox.SelectedIndex;
+            s["DtrEnable"] = Dtr_ChcBox.IsChecked == true;
+            s["RtsEnable"] = Rts_ChcBox.IsChecked == true;
+            s["Timestamp"] = Timestamp_ChcBox.IsChecked == true;
+            s["HexView"] = HexView_ChcBox.IsChecked == true;
+            s["AutoScroll"] = AutoScroll_Btn.IsChecked == true;
         }
 
         private void LoadSettings()
         {
             var s = Windows.Storage.ApplicationData.Current.LocalSettings.Values;
 
-            // Restore port selection after populating the list
+            // Restore port selection after populating the list (match by PortName, not display string)
             if (s.TryGetValue("Port", out object port) && port is string portName)
                 for (int i = 0; i < Port_CmbBox.Items.Count; i++)
-                    if (Port_CmbBox.Items[i].ToString() == portName)
-                    { Port_CmbBox.SelectedIndex = i; break; }
+                {
+                    string name = (Port_CmbBox.Items[i] as PortItem)?.PortName
+                               ?? Port_CmbBox.Items[i].ToString();
+                    if (name == portName) { Port_CmbBox.SelectedIndex = i; break; }
+                }
 
-            if (s.TryGetValue("BaudRate",   out object br)  && br  is int brIdx)  BaudR_CmbBox.SelectedIndex    = brIdx;
-            if (s.TryGetValue("DataBits",   out object db)  && db  is int dbIdx)  DataBits_CmbBox.SelectedIndex  = dbIdx;
-            if (s.TryGetValue("StopBits",   out object sb)  && sb  is int sbIdx)  StopBits_CmbBox.SelectedIndex  = sbIdx;
-            if (s.TryGetValue("Parity",     out object pa)  && pa  is int paIdx)  Parity_CmbBox.SelectedIndex    = paIdx;
-            if (s.TryGetValue("Encoding",   out object enc) && enc is int encIdx) Encoding_CmbBox.SelectedIndex  = encIdx;
-            if (s.TryGetValue("LineEnding", out object le)  && le  is int leIdx)  LineEnding_CmbBox.SelectedIndex = leIdx;
+            if (s.TryGetValue("BaudRate", out object br) && br is int brIdx) BaudR_CmbBox.SelectedIndex = brIdx;
+            if (s.TryGetValue("DataBits", out object db) && db is int dbIdx) DataBits_CmbBox.SelectedIndex = dbIdx;
+            if (s.TryGetValue("StopBits", out object sb) && sb is int sbIdx) StopBits_CmbBox.SelectedIndex = sbIdx;
+            if (s.TryGetValue("Parity", out object pa) && pa is int paIdx) Parity_CmbBox.SelectedIndex = paIdx;
+            if (s.TryGetValue("Encoding", out object enc) && enc is int encIdx) Encoding_CmbBox.SelectedIndex = encIdx;
+            if (s.TryGetValue("LineEnding", out object le) && le is int leIdx) LineEnding_CmbBox.SelectedIndex = leIdx;
 
-            if (s.TryGetValue("DtrEnable",  out object dtr) && dtr is bool dtrVal) Dtr_ChcBox.IsChecked = dtrVal;
-            if (s.TryGetValue("RtsEnable",  out object rts) && rts is bool rtsVal) Rts_ChcBox.IsChecked = rtsVal;
-            if (s.TryGetValue("Timestamp",  out object ts)  && ts  is bool tsVal)  { Timestamp_ChcBox.IsChecked = tsVal; _timestampEnabled = tsVal; }
-            if (s.TryGetValue("HexView",    out object hv)  && hv  is bool hvVal)  { HexView_ChcBox.IsChecked   = hvVal; _hexViewEnabled   = hvVal; }
-            if (s.TryGetValue("AutoScroll", out object au)  && au  is bool auVal)  { AutoScroll_Btn.IsChecked   = auVal; _autoScroll       = auVal; }
+            if (s.TryGetValue("DtrEnable", out object dtr) && dtr is bool dtrVal) Dtr_ChcBox.IsChecked = dtrVal;
+            if (s.TryGetValue("RtsEnable", out object rts) && rts is bool rtsVal) Rts_ChcBox.IsChecked = rtsVal;
+            if (s.TryGetValue("Timestamp", out object ts) && ts is bool tsVal) { Timestamp_ChcBox.IsChecked = tsVal; _timestampEnabled = tsVal; }
+            if (s.TryGetValue("HexView", out object hv) && hv is bool hvVal) { HexView_ChcBox.IsChecked = hvVal; _hexViewEnabled = hvVal; }
+            if (s.TryGetValue("AutoScroll", out object au) && au is bool auVal) { AutoScroll_Btn.IsChecked = auVal; _autoScroll = auVal; }
         }
 
         #endregion
 
         #region Helpers
+
+        private static T FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T match) return match;
+                var result = FindDescendant<T>(child);
+                if (result is not null) return result;
+            }
+            return null;
+        }
 
         private void LogError(string message)
         {
@@ -493,8 +549,9 @@ namespace WinUI3_Serial_Port_Communication
             DispatcherQueue.TryEnqueue(() =>
             {
                 _errorCount++;
-                Error_TxtBox.Text          += $"[{timestamp}] {message}\n";
-                ErrorCount_Txt.Text         = _errorCount.ToString();
+                string appended = Error_TxtBox.Text + $"[{timestamp}] {message}\n";
+                Error_TxtBox.Text = SerialTerminalHelpers.TrimToMaxLines(appended, MaxErrorLines);
+                ErrorCount_Txt.Text = _errorCount.ToString();
                 ErrorCount_Badge.Visibility = Visibility.Visible;
             });
         }
