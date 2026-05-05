@@ -6,9 +6,7 @@ A serial port communication tool built with WinUI 3 and .NET 8, featuring a clea
 
 ## Screenshots
 
-![Main Window](https://user-images.githubusercontent.com/35468866/142761957-9c3f2fc4-ddcd-4ab6-a87d-30525fbd2813.png)
-
-![Communication Panel](https://user-images.githubusercontent.com/35468866/142762038-f1e115b1-16ac40e8-9ddf-4dfd10efb74d.png)
+<img width="1908" height="1008" alt="1" src="https://github.com/user-attachments/assets/06bd23c6-ccc9-4a82-b098-6204246d9151" />
 
 ## Features
 
